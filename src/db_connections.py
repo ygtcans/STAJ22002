@@ -239,6 +239,7 @@ class AWSClient(BaseDBConnection):
                 print(f"{bucket['Name']} - {bucket['CreationDate']}")
         except Exception as e:
             print("Error listing buckets: ", e)
+            
     def delete_bucket(self, bucket_name):
         """
         Deletes a bucket from AWS S3.
