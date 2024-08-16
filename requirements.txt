@@ -1,0 +1,8 @@
+pandas==2.2.2
+pyarrow==16.0.0
+fastparquet==2024.2.0
+numpy==1.26.4
+psycopg2-binary==2.9.9
+minio==7.2.7
+sqlalchemy==2.0.30
+python-dotenv==1.0.1
