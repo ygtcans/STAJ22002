@@ -5,6 +5,10 @@ from sqlalchemy.orm.session import Session
 from dotenv import load_dotenv
 from minio import Minio
 import os
+import boto3
+from boto3.session import Session
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+
 from abc import ABC, abstractmethod
 
 # Load the .env file
@@ -161,3 +165,106 @@ class MinioClient(BaseDBConnection):
                 print(f"{bucket.name} - {bucket.creation_date}")
         except Exception as e:
             print("Error: ", e)
+
+class AWSClient(BaseDBConnection):
+    """
+    Class for AWS S3 client connection.
+    """
+    def __init__(self):
+        """
+        Initializes AWSClient object and fetches connection details from environment variables.
+        """
+        self.aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+        self.aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        self.aws_session_token = os.getenv("AWS_SESSION_TOKEN", None)
+        self.region_name = os.getenv("AWS_REGION", "us-east-1")
+        self.s3_client = None
+
+    def connect(self):
+        """
+        Connects to the AWS S3 server.
+        
+        Returns:
+            boto3.client: Boto3 S3 client object representing the connection to the server.
+        """
+        try:
+            session = Session(
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                aws_session_token=self.aws_session_token,
+                region_name=self.region_name
+            )
+            self.s3_client = session.client('s3')
+            print(f"Connected to AWS S3 in region {self.region_name}")
+            return self.s3_client
+        except (NoCredentialsError, PartialCredentialsError) as e:
+            print(f"Error connecting to AWS S3: {e}")
+
+    def create_bucket(self, bucket_name):
+        """
+        Creates a new bucket on AWS S3.
+        
+        Args:
+            bucket_name (str): Name of the bucket to create.
+        
+        Returns:
+            None
+        """
+        if not self.s3_client:
+            print("Not connected to AWS S3. Please call connect() first.")
+            return
+        try:
+            self.s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={
+                'LocationConstraint': self.region_name
+            })
+            print(f"Bucket '{bucket_name}' created successfully!")
+        except self.s3_client.exceptions.BucketAlreadyExists as e:
+            print(f"Bucket '{bucket_name}' already exists: {e}")
+        except Exception as e:
+            print(f"Error creating bucket: {e}")
+
+    def list_buckets(self):
+        """
+        Lists all buckets on AWS S3.
+        
+        Returns:
+            None
+        """
+        if not self.s3_client:
+            print("Not connected to AWS S3. Please call connect() first.")
+            return
+        try:
+            response = self.s3_client.list_buckets()
+            for bucket in response['Buckets']:
+                print(f"{bucket['Name']} - {bucket['CreationDate']}")
+        except Exception as e:
+            print("Error listing buckets: ", e)
+    def delete_bucket(self, bucket_name):
+        """
+        Deletes a bucket from AWS S3.
+    
+        Args:
+            bucket_name (str): Name of the bucket to delete.
+    
+        Returns:
+            None
+        """
+    
+        try:
+            # Before deleting, you must delete all objects in the bucket
+            response = self.s3_client.list_objects_v2(Bucket=bucket_name)
+        
+            # If the bucket contains objects, delete them
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    self.s3_client.delete_object(Bucket=bucket_name, Key=obj['Key'])
+                    print(f"Deleted object: {obj['Key']}")
+        
+            # Delete the bucket
+            self.s3_client.delete_bucket(Bucket=bucket_name)
+            print(f"Bucket '{bucket_name}' deleted successfully!")
+    
+        except self.s3_client.exceptions.NoSuchBucket as e:
+            print(f"Bucket '{bucket_name}' does not exist: {e}")
+        except Exception as e:
+            print(f"Error deleting bucket: {e}")
