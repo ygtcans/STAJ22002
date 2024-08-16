@@ -1,5 +1,5 @@
 import pandas as pd
-from src.data_io_manager import LocalDataHandler
+from src.data_io_manager import LocalDataHandler, S3DataHandler
 from src.db_connections import AWSClient
 
 def main():
@@ -23,9 +23,10 @@ def main():
     #Bağlantıdan sonra bir bucket oluşturalım.
     aws_client.create_bucket("ygtcans-test-bucket")
     #Oluşturduğumuz bucket içerisne elimizde dosyaları yazalım/yükleyelim.
-    
-
-    
+    s3 = S3DataHandler()
+    s3.write("data","ygtcans-test-bucket","data")
+    #Yüklediğimiz dosyaları okuyarak/indirerek task i tamamlayalım.
+    s3.read("ygtcans-test-bucket","data_s3","data","data/",multiple=True)
     
 
 if __name__ == '__main__':
