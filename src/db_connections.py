@@ -268,3 +268,69 @@ class AWSClient(BaseDBConnection):
             print(f"Bucket '{bucket_name}' does not exist: {e}")
         except Exception as e:
             print(f"Error deleting bucket: {e}")
+
+class MySQLDB(BaseDBConnection):
+    """
+    Class for MySQL database connection.
+    """
+    def __init__(self):
+        """
+        Initializes MySQLDB object and fetches connection details from environment variables.
+        """
+        self.host = os.getenv("MYSQL_HOST")
+        self.port = os.getenv("MYSQL_PORT", "3306")  # MySQL default port is 3306
+        self.db = os.getenv("MYSQL_DB")
+        self.user = os.getenv("MYSQL_USER")
+        self.password = os.getenv("MYSQL_PASSWORD")
+
+        # Initialize SQLAlchemy Engine and Session objects
+        self.engine: Engine = None
+        self.Session: Session = None
+
+    def connect(self):
+        """
+        Connects to the MySQL database.
+        
+        Returns:
+            Engine: SQLAlchemy Engine object representing the database connection.
+            Session: SQLAlchemy Session object representing the database session.
+        """
+        try:
+            self.engine = create_engine(f'mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}')
+            self.Session = sessionMaker(bind=self.engine)
+            print("Successfully connected to: ", self.engine.url)
+        except Exception as e:
+            print("Connection failed: ", e)
+        return self.engine, self.Session
+
+    def disconnect(self):
+        """
+        Disconnects from the MySQL database.
+        """
+        try:
+            if self.engine:
+                self.engine.dispose()
+                print("Disconnected from: ", self.engine.url)
+            else:
+                print("Already disconnected.")    
+        except Exception as e:
+            print("Disconnection failed: ", e)
+
+    def execute_query(self, query):
+        """
+        Executes a SQL query on the MySQL database.
+        
+        Args:
+            query (str): SQL query to execute.
+        
+        Returns:
+            ResultProxy: ResultProxy object representing the result of the query.
+        """
+        try: 
+            with self.engine.connect() as connection:
+                result = connection.execute(text(query))
+                print("Successfully executed.")
+                connection.commit()
+                return result
+        except Exception as e:
+            print("Failed: ", e)
