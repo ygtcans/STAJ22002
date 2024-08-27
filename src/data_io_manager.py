@@ -5,7 +5,6 @@ import json
 import os
 import datetime
 from sqlalchemy import text
-import boto3
 from botocore.exceptions import NoCredentialsError
 
 class BaseDataHandler(ABC):
