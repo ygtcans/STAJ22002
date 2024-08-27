@@ -1,10 +1,12 @@
 import pandas as pd
 from abc import ABC, abstractmethod
-from src.db_connections import PostgreSQLDB, MinioClient, MySQLDB
+from src.db_connections import PostgreSQLDB, MinioClient, AWSClient, MySQLDB
 import json
 import os
 import datetime
 from sqlalchemy import text
+import boto3
+from botocore.exceptions import NoCredentialsError
 
 class BaseDataHandler(ABC):
 
@@ -285,91 +287,3 @@ class MinIODataHandler(BaseDataHandler):
             return True
         except Exception as e:
             raise RuntimeError(f"Error downloading from MinIO: {e}")
-        
-class MySQLDataHandler(BaseDataHandler):
-    """Handles reading and writing data to a MySQL database."""
-
-    def __init__(self):
-        self.mysql = MySQLDB()
-        self.engine, self.session = self.mysql.connect()
-
-    def _get_mysql_type(self, series: pd.Series) -> str:
-        """
-        Maps a Pandas Series dtype to a MySQL data type.
-
-        Args:
-            series (pd.Series): The Pandas Series to map.
-
-        Returns:
-            str: The MySQL data type.
-        """
-        type_mapping = {
-            'object': 'TEXT',
-            'int64': 'BIGINT',
-            'int32': 'INT',
-            'float64': 'DOUBLE',
-            'float32': 'FLOAT',
-            'datetime64[ns]': 'DATETIME'
-        }
-
-        series_dtype = str(series.dtype)
-        return type_mapping.get(series_dtype, 'TEXT')
-
-    def _create_table(self, table_name: str, columns_info: str) -> None:
-        """
-        Creates a MySQL table if it does not exist.
-
-        Args:
-            table_name (str): The name of the table.
-            columns_info (str): The columns and their data types.
-
-        Returns:
-            None
-        """
-        create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_info})"
-        try:
-            self.mysql.execute_query(create_table_query)
-            print(f"Table created successfully: {table_name}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to create table {table_name}: {e}")
-
-    def write(self, data: pd.DataFrame, table_name: str) -> None:
-        """
-        Writes data to a MySQL table.
-
-        Args:
-            data (pd.DataFrame): The DataFrame to write.
-            table_name (str): The name of the MySQL table.
-
-        Returns:
-            None
-        """
-        try:
-            column_types = {column: self._get_mysql_type(data[column]) for column in data.columns}
-            columns_info = ', '.join([f"{col} {col_type}" for col, col_type in column_types.items()])
-            self._create_table(table_name, columns_info)
-            data.to_sql(table_name, con=self.engine, if_exists='append', index=False)
-            print(f"Successfully written DataFrame to MySQL table: {table_name}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to write DataFrame to MySQL table {table_name}: {e}")
-        finally:
-            self.mysql.disconnect()
-
-    def read(self, table_name: str) -> pd.DataFrame:
-        """
-        Reads data from a MySQL table.
-
-        Args:
-            table_name (str): The name of the table to read.
-
-        Returns:
-            pd.DataFrame: The DataFrame containing the read data.
-        """
-        try:
-            query = f"SELECT * FROM {table_name}"
-            result = self.mysql.execute_query(query)
-            data = result.fetchall()
-            columns = result.keys()
-            return pd.DataFrame(data, columns=columns)
-        except Exception as e:
-            raise RuntimeError(f"Failed to read data from MySQL table {table_name}: {e}")
