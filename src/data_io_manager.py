@@ -1,6 +1,6 @@
 import pandas as pd
 from abc import ABC, abstractmethod
-from src.db_connections import PostgreSQLDB, MinioClient
+from src.db_connections import PostgreSQLDB, MinioClient, MySQLDB
 import json
 import os
 import datetime
