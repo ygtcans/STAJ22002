@@ -4,19 +4,26 @@ from airflow.utils.dates import days_ago
 import pandas as pd
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-
 from data_io_manager import S3DataHandler, MySQLDataHandler
+from data_cleaner import DataCleaner
 
 # Define constants
 S3_BUCKET_NAME = 'ygtcans-test-bucket'
 S3_OBJECT_NAME = 'US_Airline_Flight_Routes_and_Fares_1993-2024.csv'
 TMP_DIR = 'tmp'
 MYSQL_TABLE_NAME = 'flight_data'
+CLEANED_FILE_NAME = 'cleaned_US_Airline_Flight_Routes_and_Fares_1993-2024.csv'
 
 # Define functions
+def ensure_tmp_dir_exists():
+    if not os.path.exists(TMP_DIR):
+        os.makedirs(TMP_DIR)
+
 def extract_from_s3():
+    ensure_tmp_dir_exists()
     s3_handler = S3DataHandler()
     s3_handler.read(
         bucket_name=S3_BUCKET_NAME,
@@ -25,15 +32,18 @@ def extract_from_s3():
     )
 
 def transform_data():
-    # Placeholder for transformation logic
-    # For now, this function does nothing
-    print("Transformation step is currently empty.")
-
-def load_to_mysql():
-    # Load data from the temporary file to MySQL
-    mysql_handler = MySQLDataHandler()
     file_path = os.path.join(TMP_DIR, S3_OBJECT_NAME)
     df = pd.read_csv(file_path)
+    cleaner = DataCleaner(df)
+    cleaned_df = cleaner.clean_data()
+    cleaned_file_path = os.path.join(TMP_DIR, CLEANED_FILE_NAME)
+    cleaned_df.to_csv(cleaned_file_path, index=False)
+
+def load_to_mysql():
+    # Load cleaned data from the temporary file to MySQL
+    mysql_handler = MySQLDataHandler()
+    cleaned_file_path = os.path.join(TMP_DIR, CLEANED_FILE_NAME)
+    df = pd.read_csv(cleaned_file_path)
     mysql_handler.write(data=df, table_name=MYSQL_TABLE_NAME)
 
 def cleanup_files():
@@ -42,7 +52,6 @@ def cleanup_files():
         for file in os.listdir(TMP_DIR):
             os.remove(os.path.join(TMP_DIR, file))
         os.rmdir(TMP_DIR)
-    print("Temporary files cleaned up.")
 
 # Define the DAG
 default_args = {
