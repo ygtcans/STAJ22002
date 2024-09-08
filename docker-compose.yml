@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   postgres:
     container_name: container-pg
@@ -31,13 +30,14 @@ services:
     container_name: container-minio
     image: minio/minio
     ports:
-      - "9000:9000"
+      - "9000:9000"   # MinIO API portu
+      - "9001:9001"   # MinIO WebUI portu
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio-data:/data
-    command: server /data
+    command: server /data --console-address ":9001"
     restart: unless-stopped
 
 volumes:
