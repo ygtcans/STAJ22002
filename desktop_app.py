@@ -1,14 +1,17 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
+from tkinter import filedialog, messagebox, simpledialog, ttk
+import pandas as pd
 from data_io_manager import LocalDataHandler, PostgresDataHandler, MySQLDataHandler, S3DataHandler, MinIODataHandler
 from data_cleaner import DataCleaner
+import os
+import tempfile
 
 class DesignedButton(tk.Canvas):
     def __init__(self, parent, text, command=None, **kwargs):
-        super().__init__(parent, width=150, height=40, bg='#4CAF50', highlightthickness=0, **kwargs)
+        super().__init__(parent, width=170, height=50, bg='#4CAF50', highlightthickness=0, **kwargs)
         self.command = command
         self.text = text
-        self.text_id = self.create_text(75, 20, text=self.text, fill='white', font=('Helvetica', 12, 'bold'))
+        self.text_id = self.create_text(85, 25, text=self.text, fill='white', font=('Helvetica', 12, 'bold'))
         self.bind("<Button-1>", self.on_click)
         self.bind("<Enter>", self.on_enter)
         self.bind("<Leave>", self.on_leave)
@@ -29,26 +32,37 @@ class DesignedButton(tk.Canvas):
 
     def update_text(self):
         self.delete(self.text_id)
-        self.text_id = self.create_text(75, 20, text=self.text, fill='white', font=('Helvetica', 12, 'bold'))
+        self.text_id = self.create_text(85, 25, text=self.text, fill='white', font=('Helvetica', 12, 'bold'))
 
-class DataApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Data Management App")
-        self._set_window_size()
+class DataApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Data Management App")
+        self.geometry("1000x700")
 
+        # Initialize variables
         self.file_path = None
         self.file_extension = None
         self.df = None
         self.cleaned_df = None
         self.sort_reverse = False
 
-        self.main_frame = tk.Frame(root, bg='#f7f7f7')
+        # Create UI components
+        self.main_frame = tk.Frame(self, bg='#f7f7f7')
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.upload_button = DesignedButton(self.main_frame, text="Upload File", command=self.upload_file)
-        self.upload_button.pack(pady=20, anchor="center")
+        # Create a frame for buttons
+        self.button_frame = tk.Frame(self.main_frame, bg='#f7f7f7')
+        self.button_frame.pack(pady=20)
 
+        # Add Upload Button
+        self.upload_button = DesignedButton(self.button_frame, text="Upload File", command=self.upload_file)
+        self.upload_button.grid(row=0, column=0, padx=10)
+
+        # Add Download Buttons
+        self.add_download_buttons()
+
+        # Add Buttons for Data Management
         self.buttons_frame = tk.Frame(self.main_frame, bg='#f7f7f7')
         self.buttons_frame.pack(pady=20)
 
@@ -61,12 +75,73 @@ class DataApp:
 
         self.table_frame = None
 
-    def _set_window_size(self):
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        window_width = int(screen_width * 0.5)
-        window_height = int(screen_height * 0.5)
-        self.root.geometry(f"{window_width}x{window_height}")
+    def add_download_buttons(self):
+        # Adding PostgreSQL button
+        self.postgres_button = DesignedButton(self.button_frame, text="Download from PostgreSQL", command=self.download_postgres)
+        self.postgres_button.grid(row=0, column=1, padx=10)
+
+        # Adding MySQL button
+        self.mysql_button = DesignedButton(self.button_frame, text="Download from MySQL", command=self.download_mysql)
+        self.mysql_button.grid(row=0, column=2, padx=10)
+
+        # Adding MinIO button
+        self.minio_button = DesignedButton(self.button_frame, text="Download from MinIO", command=self.download_minio)
+        self.minio_button.grid(row=0, column=3, padx=10)
+
+        # Adding S3 button
+        self.s3_button = DesignedButton(self.button_frame, text="Download from S3", command=self.download_s3)
+        self.s3_button.grid(row=0, column=4, padx=10)
+
+    def download_postgres(self):
+        table_name = self.prompt_for_table()
+        if not table_name:
+            return
+
+        format_choice = self.prompt_for_format()
+        if not format_choice:
+            return
+
+        postgres_handler = PostgresDataHandler()
+        data = postgres_handler.read(table_name)
+        self.save_data(data, "Postgres_Data", format_choice)
+
+    def download_mysql(self):
+        table_name = self.prompt_for_table()
+        if not table_name:
+            return
+
+        format_choice = self.prompt_for_format()
+        if not format_choice:
+            return
+
+        mysql_handler = MySQLDataHandler()
+        data = mysql_handler.read(table_name)
+        self.save_data(data, "MySQL_Data", format_choice)
+
+    def download_minio(self):
+        bucket_name, object_name = self.prompt_for_bucket_and_object()
+        if not bucket_name or not object_name:
+            return
+
+        minio_handler = MinIODataHandler()
+        minio_handler.read(bucket_name, "/Users/ygtcan/Downloads/", object_name)
+
+    def download_s3(self):
+        bucket_name, object_name = self.prompt_for_bucket_and_object()
+        if not bucket_name or not object_name:
+            return
+
+        s3_handler = S3DataHandler()
+        s3_handler.read(bucket_name, "/Users/ygtcan/Downloads/", object_name)
+
+    def save_data(self, data, base_name, file_format):
+        output_dir = filedialog.askdirectory()
+        if not output_dir:
+            return
+
+        local_handler = LocalDataHandler()
+        local_handler.write(data, base_name, output_dir, file_format)
+        messagebox.showinfo("Success", f"Data saved in {file_format.upper()} format.")
 
     def upload_file(self):
         self.file_path = filedialog.askopenfilename()
@@ -120,7 +195,7 @@ class DataApp:
         if self.table_frame:
             self.table_frame.destroy()
 
-        self.table_frame = tk.Frame(self.root)
+        self.table_frame = tk.Frame(self)
         self.table_frame.pack(fill="both", expand=True)
 
         x_scrollbar = tk.Scrollbar(self.table_frame, orient="horizontal")
@@ -168,91 +243,122 @@ class DataApp:
             messagebox.showerror("Error", f"Failed to clean data: {e}")
 
     def write_to_postgres(self):
-        self._write_to_database(PostgresDataHandler, "PostgreSQL")
+        if self.cleaned_df is None:
+            messagebox.showerror("Error", "No cleaned data to write.")
+            return
+
+        table_name = simpledialog.askstring("Table Name", "Enter the table name:")
+        if not table_name:
+            return
+
+        postgres_handler = PostgresDataHandler()
+        postgres_handler.write(self.cleaned_df, table_name)
+        messagebox.showinfo("Success", "Data written to PostgreSQL.")
 
     def write_to_mysql(self):
-        self._write_to_database(MySQLDataHandler, "MySQL")
+        if self.cleaned_df is None:
+            messagebox.showerror("Error", "No cleaned data to write.")
+            return
+        self.cleaned_df.columns = self.cleaned_df.columns.str.strip()
+        table_name = simpledialog.askstring("Table Name", "Enter the table name:")
+        if not table_name:
+            return
+
+        mysql_handler = MySQLDataHandler()
+        mysql_handler.write(self.cleaned_df, table_name)
+        messagebox.showinfo("Success", "Data written to MySQL.")
 
     def write_to_s3(self):
-        bucket_name, object_name = self.get_s3_minio_inputs("Enter S3 bucket name and object name:")
-        if bucket_name and object_name:
-            if self.file_path is None:
-                messagebox.showerror("Error", "File path is missing.")
+        if self.cleaned_df is None:
+            messagebox.showerror("Error", "No cleaned data to write.")
+            return
+
+        bucket_name = simpledialog.askstring("Bucket Name", "Enter the bucket name:")
+        object_name = simpledialog.askstring("Object Name", "Enter the object name:")
+        if not bucket_name or not object_name:
+            return
+
+        try:
+            file_extension = self.file_extension.lower()  
+            if file_extension not in ['csv', 'json', 'parquet']:
+                messagebox.showerror("Error", "Unsupported file type.")
                 return
 
-            try:
-                handler = S3DataHandler()
-                handler.write(self.file_path, bucket_name, object_name)
-                messagebox.showinfo("Success", "File uploaded to S3.")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to upload to S3: {e}")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
+                temp_path = temp_file.name
+
+                if file_extension == 'csv':
+                    self.cleaned_df.to_csv(temp_path, index=False)
+                elif file_extension == 'json':
+                    self.cleaned_df.to_json(temp_path, orient='records', lines=True)
+                elif file_extension == 'parquet':
+                    self.cleaned_df.to_parquet(temp_path)
+
+            s3_handler = S3DataHandler()
+            s3_handler.write(temp_path, bucket_name, object_name)
+            messagebox.showinfo("Success", f"Data written to S3 as {file_extension.upper()}.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to write data to S3: {e}")
+
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def write_to_minio(self):
-        bucket_name, object_name = self.get_s3_minio_inputs("Enter MinIO bucket name and object name:")
-        if bucket_name and object_name:
-            if self.file_path is None:
-                messagebox.showerror("Error", "File path is missing.")
+        if self.cleaned_df is None:
+            messagebox.showerror("Error", "No cleaned data to write.")
+            return
+
+        bucket_name = simpledialog.askstring("Bucket Name", "Enter the bucket name:")
+        object_name = simpledialog.askstring("Object Name", "Enter the object name:")
+        if not bucket_name or not object_name:
+            return
+
+        try:
+            file_extension = self.file_extension.lower()  
+            if file_extension not in ['csv', 'json', 'parquet']:
+                messagebox.showerror("Error", "Unsupported file type.")
                 return
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
+                temp_path = temp_file.name
 
-            try:
-                handler = MinIODataHandler()
-                handler.write(self.file_path, bucket_name, object_name)
-                messagebox.showinfo("Success", "File uploaded to MinIO.")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to upload to MinIO: {e}")
+                if file_extension == 'csv':
+                    self.cleaned_df.to_csv(temp_path, index=False)
+                elif file_extension == 'json':
+                    self.cleaned_df.to_json(temp_path, orient='records', lines=True)
+                elif file_extension == 'parquet':
+                    self.cleaned_df.to_parquet(temp_path)
+                    
+            minio_handler = MinIODataHandler()
+            minio_handler.write(temp_path, bucket_name, object_name)
+            messagebox.showinfo("Success", f"Data written to MinIO as {file_extension.upper()}.")
 
-    def _write_to_database(self, handler_class, db_name):
-        table_name = self.get_input(f"Enter {db_name} table name:")
-        if table_name:
-            if self.cleaned_df is None and self.df is None:
-                messagebox.showerror("Error", f"File data or table name is missing for {db_name}.")
-                return
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to write data to MinIO: {e}")
 
-            try:
-                handler = handler_class()
-                handler.write(self.cleaned_df if self.cleaned_df is not None else self.df, table_name)
-                messagebox.showinfo("Success", f"Data written to {db_name}.")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to write to {db_name}: {e}")
+        finally:
+            
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
-    def get_input(self, prompt):
-        return simpledialog.askstring("Input", prompt)
+    def prompt_for_table(self):
+        return simpledialog.askstring("Table Name", "Enter the table name:")
 
-    def get_s3_minio_inputs(self, prompt):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Input Required")
-        dialog.geometry("350x250")  
+    def prompt_for_format(self):
+        formats = ["csv", "json", "parquet"]
+        format_choice = simpledialog.askstring("Format", f"Choose format ({', '.join(formats)}):")
+        if format_choice not in formats:
+            messagebox.showerror("Error", "Invalid format. Please choose from csv, json, or parquet.")
+            return None
+        return format_choice
 
-        tk.Label(dialog, text=prompt).pack(pady=10)
-        
-        tk.Label(dialog, text="Bucket Name:").pack(pady=5)
-        bucket_name_entry = tk.Entry(dialog, width=30)  
-        bucket_name_entry.pack(pady=5)
-
-        tk.Label(dialog, text="Object Name:").pack(pady=5)
-        object_name_entry = tk.Entry(dialog, width=30)  
-        object_name_entry.pack(pady=5)
-
-        def submit():
-            self.bucket_name = bucket_name_entry.get()
-            self.object_name = object_name_entry.get()
-            dialog.destroy()
-
-        def cancel():
-            self.bucket_name = None
-            self.object_name = None
-            dialog.destroy()
-
-        button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=10)
-
-        tk.Button(button_frame, text="Submit", command=submit).pack(side="left", padx=10)
-        tk.Button(button_frame, text="Cancel", command=cancel).pack(side="right", padx=10)
-
-        self.root.wait_window(dialog)
-        return self.bucket_name, self.object_name
+    def prompt_for_bucket_and_object(self):
+        bucket_name = simpledialog.askstring("Bucket Name", "Enter the bucket name:")
+        object_name = simpledialog.askstring("Object Name", "Enter the object name:")
+        return bucket_name, object_name
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = DataApp(root)
-    root.mainloop()
+    app = DataApp()
+    app.mainloop()

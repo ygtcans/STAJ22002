@@ -65,19 +65,23 @@ class LocalDataHandler(BaseDataHandler):
         date_str = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         return os.path.join(output_dir, f"{base_name}_{date_str}.{extension}")
 
-    def write(self, df: pd.DataFrame, base_name: str, output_dir: str, extension: str) -> None:
+    def write(self, df: pd.DataFrame, base_name: str, output_dir: str = None, extension: str = 'csv') -> None:
         """
-        Writes data to a local file.
+        Writes data to a local file in the Downloads folder.
 
         Args:
             df (pd.DataFrame): The DataFrame to write.
             base_name (str): The base name of the file.
-            output_dir (str): The directory where the file will be saved.
-            extension (str): The file extension.
+            output_dir (str): The directory where the file will be saved. Defaults to Downloads.
+            extension (str): The file extension (json, csv, parquet).
 
         Returns:
             None
         """
+        # Default to the Downloads directory if no output directory is provided
+        if output_dir is None:
+            output_dir = os.path.expanduser('~/Downloads')
+
         os.makedirs(output_dir, exist_ok=True)
         file_path = self._generate_file_name(base_name, extension, output_dir)
 
@@ -100,7 +104,7 @@ class LocalDataHandler(BaseDataHandler):
 class PostgresDataHandler(BaseDataHandler):
     """Handles reading and writing data to a PostgreSQL database."""
 
-    def _init_(self):
+    def __init__(self):
         self.postgres = PostgreSQLDB()
         self.engine, self.session = self.postgres.connect()
 
@@ -189,7 +193,7 @@ class PostgresDataHandler(BaseDataHandler):
 class MinIODataHandler(BaseDataHandler):
     """Handles reading and writing data to MinIO object storage."""
 
-    def _init_(self):
+    def __init__(self):
         self.minio = MinioClient()
         self.client = self.minio.connect()
 

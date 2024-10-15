@@ -32,7 +32,7 @@ class PostgreSQLDB(BaseDBConnection):
     """
     Class for PostgreSQL database connection.
     """
-    def _init_(self):
+    def __init__(self):
         """
         Initializes PostgreSQLDB object and fetches connection details from environment variables.
         """
@@ -89,7 +89,6 @@ class PostgreSQLDB(BaseDBConnection):
             with self.engine.connect() as connection:
                 result = connection.execute(text(query))
                 print("Successfully executed.")
-                connection.commit()
                 return result
         except Exception as e:
             print("Failed: ", e)
@@ -98,7 +97,7 @@ class MinioClient(BaseDBConnection):
     """
     Class for MinIO client connection.
     """
-    def _init_(self):
+    def __init__(self):
         """
         Initializes MinioClient object and fetches connection details from environment variables.
         """
@@ -330,8 +329,8 @@ class MySQLDB(BaseDBConnection):
         try: 
             with self.engine.connect() as connection:
                 result = connection.execute(text(query))
+                print(result)
                 print("Successfully executed.")
-                connection.commit()
                 return result
         except Exception as e:
             print("Failed: ", e)
